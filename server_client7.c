@@ -19,6 +19,14 @@
 struct _configure {
     int port_num;
     char ip[14];
+    /*  int rows;
+        int columns */
+  // DMO - you need something here to keep track of things sent/received.
+  int  seqNumberSent; // For lab 7
+  int  ackNumberSent;
+  int  seqNumberReceived; // For lab 7
+  int  ackNumberReceived;
+
 };
 
 // Structure that holds info pertaining to the message being sent
@@ -33,6 +41,9 @@ struct _msg{
     int msg_id;
     int route[3];
     char sendPath[50];
+    /* Tracking numbers */
+    int msgSeqNum;
+    int ackSeqNum;
 };
 
 /* Function Declarations */
@@ -77,9 +88,11 @@ int main(int argc, char * argv[]) {
     char bufferACK[100];    // Variable for the ACK message that is sent to the original sender
     char serverIP[29];      // Variable for the IP address of server to be stored
     char *ptr;              // Variable for pointer ptr
+    char *ptr1;
     int rc;                 // Varaible for the return code
     int flags = 0;          // Variable recv function
     int messagVersion;      // Variable for version comparison
+    char sendPort[5];
     
     /* Server/Client information variables */
     struct sockaddr_in from_address;                // Structure variable for the from address of the message
@@ -88,7 +101,7 @@ int main(int argc, char * argv[]) {
     fd_set socketFDS;                               // Set of socket discriptors
     int maxSD;                                      // Tells the OS how many sockets are set
     
-    // Checks if number of cmd line arguments is correct
+    /* Checks if number of cmd line arguments is correct */
     if (argc < 3) {
         printf("client4 <portnumber> <location>\n");
         exit(1);
@@ -109,7 +122,7 @@ int main(int argc, char * argv[]) {
     sd = socket(AF_INET, SOCK_DGRAM, 0);                                        // Creates the socket
     rc = bind(sd, (struct sockaddr *)&server_address, sizeof(server_address));  // Binds the socket to the local address info
     
-    // Checks if the bind was successful
+    /* Checks if the bind was successful */
     if (rc < 0) {
         perror("bind");
         exit(1);
@@ -122,19 +135,26 @@ int main(int argc, char * argv[]) {
     printf("My location: %d\n", location);
     int ROWS, COLUMNS;                          // Variables hold the matrix W x H
     printf("Enter grid size (N M): ");
-    scanf("%d %d", &ROWS, &COLUMNS);
+    scanf("%d %d", &ROWS, &COLUMNS);            // Takes user input and stores the values for the grid size
     ptr = fgets(buffer, sizeof(buffer), stdin); // Gets the buffer message excluding the newline char
     int originPort = atoi(argv[1]);             // Variable for the origin port number
     int destPort;                               // Variable for the destination port number
     int hopCount = 4;                           // Variable for the hop counter
     int msg_id = 1;                             // Variable for the message ID
     char sendPath[50];                          // Variable for the message route
+    int myPortNumber;
+    /* Set tracking numbers to 1 */
+    message.msgSeqNum = 1;
+    message.ackSeqNum = 1;
+    
+    /* test variables */
+    int countForwarding = 0;
     
     // Variables used to obtain/store coordinates of location in the grid
     int choice_r;   // = x coord
     int choice_c;   // = y coord
 
-    //================================= INFINITE LOOP =================================//
+    /* ================================= INFINITE LOOP ================================= */
     for(;;)
     {
         fflush(stdin); // Used to clear the output buffer
@@ -159,14 +179,15 @@ int main(int argc, char * argv[]) {
         }
         
         rc = select (maxSD + 1, &socketFDS, NULL, NULL, NULL); // Sets which file descriptor is ready to be read
+        memset (message.sendPath, 0, 50); // DMO // Zeros out the sendPath variable
         
         /* Received information from the user */
         if (FD_ISSET(STDIN, &socketFDS))
         {
+            myPortNumber = originPort;
             /* Set the sendPath to portNumber */
-            sprintf (message.sendPath, "%d", portNumber);
+            sprintf (message.sendPath, "%d", portNumber); //DMO ?
             
-            // memset(sendPath, '\0', 50);
             memset(buffer, '\0', 100);
             scanf("%d", &destPort);                     /* DMO get the port number */
             ptr = fgets(buffer, sizeof(buffer), stdin); /* DMO get the msg */
@@ -178,19 +199,61 @@ int main(int argc, char * argv[]) {
 
             printf("Sending: '%s'\n\n", buffer);
             
+//            if (message.msgSeqNum <= 1) {
+//                /* Calls 'sendData' function to send message(s) to the server(s) */
+//                int temp;
+//                for (int i = 0; i < MAXPARTNERS; i++)
+//                {
+//                    temp = s1[i].port_num;
+//                    if (temp == portNumber) {
+//                        continue;
+//                    }
+//
+//                    strcpy(serverIP, s1[i].ip);
+//                    partner_address.sin_family = AF_INET;                   // Sets the address family for the transport address
+//                    partner_address.sin_port = htons(s1[i].port_num);       // Indexes to the 'port_num's of the struct array
+//                    partner_address.sin_addr.s_addr = inet_addr(serverIP);  // Indexes to the 'ip's of the struct array
+//                    sendData(bufferSend, sd, partner_address);              // Calls the 'sendData' funtion
+//                }
+//                message.msgSeqNum++;
+//            }
+            
+//            int temp;
+//            if (message.msgSeqNum <= 1) {
+//                for (int i = 0; i < MAXPARTNERS; i++)
+//                {
+//                    temp = s1[i].port_num;
+//                    if (temp == portNumber) {
+//                        continue;
+//                    }
+//
+//                    strcpy(serverIP, s1[i].ip);
+//                    partner_address.sin_family = AF_INET;                   // Sets the address family for the transport address
+//                    partner_address.sin_port = htons(s1[i].port_num);       // Indexes to the 'port_num's of the struct array
+//                    partner_address.sin_addr.s_addr = inet_addr(serverIP);  // Indexes to the 'ip's of the struct array
+//
+//                    sprintf(sendPort, "%d", s1[i].port_num);
+//                    ptr1 = strstr(message.sendPath, sendPort);
+//                    if (ptr1 == NULL && portNumber != message.originPort){
+//                        sendData(bufferACK, sd, partner_address);           // Calls the 'sendData' funtion
+//                    }
+//                }
+//                message.msgSeqNum++;
+//            }
+            
             int temp;
-            /* Calls 'sendData' function to send message(s) to the server(s) */
             for (int i = 0; i < MAXPARTNERS; i++)
             {
                 temp = s1[i].port_num;
                 if (temp == portNumber) {
                     continue;
                 }
-            
+
                 strcpy(serverIP, s1[i].ip);
                 partner_address.sin_family = AF_INET;                   // Sets the address family for the transport address
                 partner_address.sin_port = htons(s1[i].port_num);       // Indexes to the 'port_num's of the struct array
                 partner_address.sin_addr.s_addr = inet_addr(serverIP);  // Indexes to the 'ip's of the struct array
+            
                 sendData(bufferSend, sd, partner_address);              // Calls the 'sendData' funtion
             }
         }
@@ -201,9 +264,9 @@ int main(int argc, char * argv[]) {
             rc = recvfrom(sd, bufferRecv, sizeof(bufferRecv), flags, (struct sockaddr *)&from_address, &fromLength);
             parseMe(bufferRecv, &message); // Calls the 'parseMe' function
             
-            //================================= LOCATION STUFF =================================//
+            /* ================================= LOCATION STUFF ================================= */
             
-            // Find the coordinates of the user location
+            /* Find the coordinates of the user location */
             int x1, y1;
             int ret_1 = findCoordinates(location, &choice_r, &choice_c, ROWS, COLUMNS);
             if (-1 == ret_1) // If true then user location is NOT IN GRID
@@ -215,7 +278,7 @@ int main(int argc, char * argv[]) {
                 y1 = choice_c;
             }
             
-            // Find the coordinates of the message location
+            /* Find the coordinates of the message location */
             int x2, y2;
             int ret_2 = findCoordinates(message.location, &choice_r, &choice_c, ROWS, COLUMNS);
             if (-1 == ret_2) // If true then message location is NOT IN GRID
@@ -227,9 +290,10 @@ int main(int argc, char * argv[]) {
                 y2 = choice_c;
             }
             
-            int distanceVal = distance(x1, x2, y1, y2); // Calculates and displays the distance between the user location and message location
+            /* Calculates and displays the distance between the user location and message location */
+            int distanceVal = distance(x1, x2, y1, y2);
             
-            //================================= MESSAGE FORWARDING STUFF =================================//
+            /* ================================= MESSAGE FORWARDING STUFF ================================= */
             
             if (distanceVal > 2) // If the distance between the two coords is greater than 2 OUT OF RANGE
             {
@@ -258,9 +322,6 @@ int main(int argc, char * argv[]) {
                            "\nMessagePath = (%s)     "
                            "\nhopCount = %d \t\tmessage = %s   "
                            "\n************************************\n",
-//                           message.command, message.version, message.location, message.originPort,
-//                           message.destPort, message.command, message.msg_id, message.route[0],
-//                           message.route[1], message.route[2] , message.hopCount, message.msg);
                            message.command, message.version, message.location, message.originPort,
                            message.destPort, message.command, message.msg_id, message.sendPath, message.hopCount, message.msg);
                     
@@ -269,65 +330,66 @@ int main(int argc, char * argv[]) {
                         continue;
                     }
                     
-                //=============== ACK message stuff ===============//
+                /* =============== ACK message stuff =============== */
                     memset(bufferACK, '\0', 100);
                     printf("Sending ACK to sender...\n");
-                    
-                            /* Creates ACK message */
+                    printf ("DMO MY PORTNUMBER IS  %d\n", originPort);
+                    sprintf (message.sendPath, "%d", originPort); // DMO
+                    /* Creates ACK message */
                     sprintf(bufferACK, "%d:ACK:%d:%d:%d:%d:%d:%s:%s",
                             VERSION, location, message.destPort, message.originPort, message.hopCount, message.msg_id,
                             message.sendPath, message.msg);
-
-//                    printf("message.command = %s\n", message.command);
-//                    printf("message.version = %d\n", message.version);
-//                    printf("message.location = %d\n", location);
-//                    printf("message.destPort = %d\n", message.destPort);
-//                    printf("message.originPort = %d\n", message.originPort);
-//                    printf("message.msg = %d\n", message.hopCount);
-//                    printf("message.msg_id = %d\n", message.msg_id);
-//                    printf("message.sendPath = %s\n", message.sendPath);
-//                    printf("message.msg = %s\n", message.msg);
-//                    printf("bufferACK: %s\n\n", bufferACK);
-
-                    /* Calls 'sendData' to send message(s) to the server(s) */
-                    int temp;
+                    printf ("DMO sending ACK-> '%s'\n", bufferACK);
+                    
+                    // int temp;
                     for (int i = 0; i < MAXPARTNERS; i++)
                     {
-                        temp = s1[i].port_num;
-                        if (temp == portNumber) {
-                            continue;
+                        char sendPort [6];
+                        char * ptr1;
+                        int send2Port;
+                        send2Port = s1[i].port_num;
+                        sprintf (sendPort, "%d", send2Port);
+                        ptr1 = strstr(message.sendPath, sendPort);
+                        
+                        if ( ptr1 == NULL && send2Port != myPortNumber) {
+                            strcpy(serverIP, s1[i].ip);
+                            partner_address.sin_family = AF_INET;                   // Sets the address family for the transport address
+                            partner_address.sin_port = htons(s1[i].port_num);       // Indexes to the 'port_num's of the struct array
+                            partner_address.sin_addr.s_addr = inet_addr(serverIP);  // Indexes to the 'ip's of the struct array
+                            sendData(bufferACK, sd, partner_address);               // Calls the 'sendData' funtion
+                            
                         }
-                        
-                        
-                        strcpy(serverIP, s1[i].ip);
-                        partner_address.sin_family = AF_INET;                   // Sets the address family for the transport address
-                        partner_address.sin_port = htons(s1[i].port_num);       // Indexes to the 'port_num's of the struct array
-                        partner_address.sin_addr.s_addr = inet_addr(serverIP);  // Indexes to the 'ip's of the struct array
-                        sendData(bufferACK, sd, partner_address);               // Calls the 'sendData' funtion
-                    }
+                    }// end of for loop
                     
-                /*================== Forwarding Stuff ==================*/
+                /* ================== Forwarding Stuff ================== */
                     
                 } else if (message.originPort != originPort) {
                     message.hopCount--;
                     message.location = location;
                     
                     /* Update and append new port number to the message path */
-                sprintf (message.sendPath, "%s,%d", message.sendPath, portNumber);
+                    sprintf (message.sendPath, "%s,%d", message.sendPath, originPort); // DMO
                     
                     if (message.hopCount > 0)
                     {
-                            /* Loop and send to each server */
-                        sprintf(bufferSend, "%d:INFO:%d:%d:%d:%d:%d:%s:%s",
-                                VERSION, location, message.destPort, message.originPort, message.hopCount, message.msg_id,
+                        /* Loop and send to each server */
+                        sprintf(bufferSend, "%d:%s:%d:%d:%d:%d:%d:%s:%s",
+                                VERSION, message.command, location, message.destPort, message.originPort, message.hopCount, message.msg_id,
                                 message.sendPath, message.msg);
                         
+                        countForwarding++;
                         printf("************************************\n");
                         printf("Forwarding message to next gnode --->\n");
                         printf("Sending: '%s'", bufferSend);
                         printf("\nHop Count: %d", message.hopCount);
+                        printf ("\nDestination Port %d", message.destPort);
+                        printf ("\nOrigin Port %d", message.originPort);
                         printf("\n************************************\n\n");
+                        sprintf(bufferSend, "%d:%s:%d:%d:%d:%d:%d:%s:%s",
+                                VERSION, message.command, location, message.originPort, message.destPort, message.hopCount, message.msg_id,
+                                message.sendPath, message.msg);
 
+                // DMO why is this commented out?
                         for (int i = 0; i < MAXPARTNERS; i++)
                         {
                             portNumber = s1[i].port_num;
@@ -335,8 +397,35 @@ int main(int argc, char * argv[]) {
                             partner_address.sin_family = AF_INET;
                             partner_address.sin_port = htons(portNumber);
                             partner_address.sin_addr.s_addr = inet_addr(serverIP);
-                            sendData(bufferSend, sd, partner_address);
+
+                            sprintf(sendPort, "%d", s1[i].port_num);
+                            ptr1 = strstr(message.sendPath, sendPort);
+                            if (ptr1 == NULL && portNumber != message.originPort){
+                                sendData(bufferSend, sd, partner_address);           // Calls the 'sendData' funtion
+                            }
+                            // sendData(bufferSend, sd, partner_address);
                         }
+                        
+            // ? DMO not sure what this does. what does seqNum do her?
+            //                        if (message.msgSeqNum <= 2) {
+            //                            for (int i = 0; i < MAXPARTNERS; i++)
+            //                            {
+            //                                portNumber = s1[i].port_num;
+            //                                strcpy(serverIP, s1[i].ip);
+            //                                partner_address.sin_family = AF_INET;
+            //                                partner_address.sin_port = htons(portNumber);
+            //                                partner_address.sin_addr.s_addr = inet_addr(serverIP);
+            //
+            //                                sprintf(sendPort, "%d", s1[i].port_num);
+            //                                ptr1 = strstr(message.sendPath, sendPort);
+            //                                if (ptr1 == NULL && portNumber != message.originPort){
+            //                                    sendData(bufferACK, sd, partner_address);           // Calls the 'sendData' funtion
+            //                                }
+                                // sendData(bufferSend, sd, partner_address);
+            //                            }
+            //                            message.msgSeqNum++;
+            //                        }
+                        
                     } else {
                         printf("************************************\n");
                         printf("Hop Count: %d\n", message.hopCount);
@@ -351,6 +440,7 @@ int main(int argc, char * argv[]) {
              printf("\n");
         }
     }
+    printf("\nNumber of forward messages: %d\n", countForwarding);
     close(sd); // Closes the client socket
     return 0;
 }
@@ -387,8 +477,6 @@ int sendData(char *buffer, int sd, struct sockaddr_in server_address) {
 
 // Parses through the sent message and tokenizes the colon delimited values.
 void parseMe(char *line, struct _msg *message){
-    /* sprintf(bufferSend, "%d:INFO:%d:%d:%d:%d:%d:<%d:%d:%d>:%s",
-       VERSION, location, originPort, destPort, hopCount, msg_id, route[0], route[1], route[2], buffer); */
     
     int version;
     char command[20];
@@ -478,4 +566,5 @@ int distance(int c1, int c2, int r1, int r2) {
 
 
     
+
 
